@@ -21,3 +21,19 @@ class RequestLog(models.Model):
     def __str__(self):
         return f"{self.ip_address} @ {self.timestamp.isoformat()} -> {self.path}"
 
+class BlockedIP(models.Model):
+    """
+    Blacklisted IP addresses. If an incoming request's client IP matches one
+    of these entries, the middleware will return HTTP 403 Forbidden.
+    """
+    ip_address = models.CharField(max_length=45, unique=True)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Blocked IP"
+        verbose_name_plural = "Blocked IPs"
+
+    def __str__(self):
+        return self.ip_address

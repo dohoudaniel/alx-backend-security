@@ -1,31 +1,42 @@
+# ip_tracking/middleware.py
 import logging
+from django.http import HttpResponseForbidden
 
 logger = logging.getLogger(__name__)
 
 class IPLoggingMiddleware:
     """
-    Middleware that logs client IP, request path and timestamp to the RequestLog model.
+    Middleware that:
+    - Blocks requests whose client IP is present in the BlockedIP table (403).
+    - Otherwise logs the request (ip, path, timestamp) in RequestLog.
 
-    Notes:
-    - Uses X-Forwarded-For header if present (commonly set by proxies/load-balancers).
-    - Wraps DB write in try/except so middleware never breaks requests if logging fails.
+    The blacklist check is done before saving RequestLog so blocked requests are
+    rejected immediately.
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Resolve client IP (prefer X-Forwarded-For if present)
         ip = self._get_client_ip(request)
-        path = getattr(request, "path", request.path if hasattr(request, "path") else "")
+        path = getattr(request, "path", "")
 
-        # Perform a non-blocking/robust save to DB; failure should not break the app
+        # Check blacklist first; do a local import to avoid import-time cycles
         try:
-            # Import locally to avoid potential circular imports at module-import time
+            from .models import BlockedIP
+            if BlockedIP.objects.filter(ip_address=ip).exists():
+                # Optionally log the blocked attempt for audit
+                logger.warning("Blocked request from blacklisted IP %s to %s", ip, path)
+                return HttpResponseForbidden("Your IP has been blocked.")
+        except Exception as exc:
+            # If blacklist check fails (DB down etc.), log error but continue processing.
+            logger.error("Error checking BlockedIP for IP %s: %s", ip, exc)
+
+        # Not blocked -> attempt to log the request (non-fatal)
+        try:
             from .models import RequestLog
             RequestLog.objects.create(ip_address=ip, path=path)
         except Exception as exc:
-            # Log the error but do not raise — request processing should continue.
             logger.exception("Failed to log request for IP %s path %s: %s", ip, path, exc)
 
         response = self.get_response(request)
@@ -34,16 +45,13 @@ class IPLoggingMiddleware:
     def _get_client_ip(self, request):
         """
         Determine the client's IP address.
-        - If behind a proxy that sets X-Forwarded-For, take the first (client) IP.
-        - Fall back to REMOTE_ADDR.
+        Prefer X-Forwarded-For header if present (first item).
+        Fallback to REMOTE_ADDR.
         """
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            # X-Forwarded-For may be a comma-separated list: client, proxy1, proxy2
-            # We take the first item which should be the originating client IP.
             ip = x_forwarded_for.split(",")[0].strip()
             if ip:
                 return ip
-        # Fallback
         return request.META.get("REMOTE_ADDR", "")
 
