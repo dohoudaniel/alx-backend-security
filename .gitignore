@@ -1,3 +1,4 @@
 venv
 *.sqlite3
+./db.sqlite3
 alx_backend_security/*.sqlite3

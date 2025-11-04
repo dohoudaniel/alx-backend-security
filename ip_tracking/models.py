@@ -11,6 +11,8 @@ class RequestLog(models.Model):
     """
     ip_address = models.CharField(max_length=45)  # enough for IPv6
     path = models.CharField(max_length=2048)
+    country = models.CharField(max_length=100, blank=True)  # ISO country name or code
+    city = models.CharField(max_length=100, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -19,7 +21,8 @@ class RequestLog(models.Model):
         verbose_name_plural = "Request Logs"
 
     def __str__(self):
-        return f"{self.ip_address} @ {self.timestamp.isoformat()} -> {self.path}"
+        return f"{self.ip_address} @ {self.timestamp.isoformat()} -> {self.path} ({self.city}, {self.country})"
+        # return f"{self.ip_address} @ {self.timestamp.isoformat()} -> {self.path}"
 
 class BlockedIP(models.Model):
     """
