@@ -2,6 +2,7 @@
 # Create your models here.
 from django.db import models
 
+
 class RequestLog(models.Model):
     """
     Stores a simple audit of incoming requests:
@@ -24,6 +25,7 @@ class RequestLog(models.Model):
         return f"{self.ip_address} @ {self.timestamp.isoformat()} -> {self.path} ({self.city}, {self.country})"
         # return f"{self.ip_address} @ {self.timestamp.isoformat()} -> {self.path}"
 
+
 class BlockedIP(models.Model):
     """
     Blacklisted IP addresses. If an incoming request's client IP matches one
@@ -40,3 +42,27 @@ class BlockedIP(models.Model):
 
     def __str__(self):
         return self.ip_address
+
+
+class SuspiciousIP(models.Model):
+    """
+    IPs flagged by anomaly detection, with a concise reason and metadata.
+    """
+    ip_address = models.CharField(max_length=45, db_index=True)
+    reason = models.CharField(max_length=255)  # e.g. "high_request_rate", "sensitive_path_access"
+    details = models.TextField(blank=True)      # freeform details like counts or paths
+    detected_at = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(null=True, blank=True)  # optional: last activity time
+    resolved = models.BooleanField(default=False)           # mark when investigated/cleared
+
+    class Meta:
+        ordering = ("-detected_at",)
+        verbose_name = "Suspicious IP"
+        verbose_name_plural = "Suspicious IPs"
+        indexes = [
+            models.Index(fields=["ip_address"]),
+            models.Index(fields=["detected_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.ip_address} ({self.reason})"

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from celery.schedules import crontab
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,6 +41,12 @@ INSTALLED_APPS = [
     'ip_tracking',
 ]
 
+# Tell django-ratelimit to use Django cache (Redis) to store counters
+RATELIMIT_USE_CACHE = True
+
+# Optional: prefix for keys in cache
+# RATELIMIT_CACHE_PREFIX = "rl:"  # defaults to None
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -50,6 +57,14 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'ip_tracking.middleware.IPLoggingMiddleware',
 ]
+
+CELERY_BEAT_SCHEDULE = {
+    "detect-suspicious-ips-hourly": {
+        "task": "ip_tracking.tasks.detect_suspicious_ips",
+        "schedule": crontab(minute=0, hour="*"),  # every hour at minute 0
+        "options": {"queue": "anomaly"},
+    },
+}
 
 ROOT_URLCONF = 'alx_backend_security.urls'
 
